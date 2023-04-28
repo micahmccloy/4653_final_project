@@ -75,7 +75,15 @@ def manage_response(s):
     
     print("wating on client...")
     c = clients[ID]
-    msg = c.sock.recv(1024).decode()
+    try:
+        msg = c.sock.recv(1024).decode()
+    except ConnectionResetError:
+        store = f"{c.ip}:{c.port} -- {c.name} disconnected"
+        log(store)
+        c.sock.shutdown(socket.SHUT_RD)
+        c.sock.close()
+        return 1
+        
     msg = msg.split("|")
     msg = msg[:-1]
     args = len(msg)
@@ -101,7 +109,7 @@ def manage_response(s):
     if command == "SAY" and args == 2:
         store = f"{c.ip}:{c.port} -- {c.name} said {msg[1][:200]}"
         log(store)
-        send_all(c.name, f"PUBLIC|{c.name}|{msg[1][:200]}")
+        send_all(c.name, f"PUBLIC|{c.name}|{msg[1][:200]}|")
 
     elif command == "PRIVATE" and args == 3:
         target = msg[1]
@@ -148,7 +156,7 @@ def register_user(c, msg):
     ## Check to ensure the client is connecting
     if msg[0].upper() != "CONNECT" or len(msg) != 2:
 
-        store = f"{c.ip}:{c.port} -- <not connected> attempted an incorrect command"
+        store = f"{c.ip}:{c.port} -- <not connected> attempted an incorrect command: {msg}"
         log(store)
         
         c.send_data("ERROR|unknown command|", True)
