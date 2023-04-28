@@ -82,6 +82,7 @@ def manage_response(s):
         store2 = f"Closing connection with {s.getpeername()[0]}:{s.getpeername()[1]}\n"
         log(store)
         log(store2)
+        send_all(c.name, f"LEFT|{c.name}|")
 
         sockets_to_monitor.remove(s)
         names.pop(get_client_by_id(s.getpeername()).name, None)
@@ -135,9 +136,7 @@ def manage_response(s):
     elif command == "EXIT":
         store = f"{c.ip}:{c.port} -- {c.name} leaving the server"
         log(store)
-        print("EXITING Via command")
-
-        send_all(c.name, f"LEFT|{c.name}")
+        send_all(c.name, f"LEFT|{c.name}|")
         return 1
     elif command == "LIST":
         store = f"{c.ip}:{c.port} -- {c.name} requested a list of all users"
