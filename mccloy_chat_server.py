@@ -87,10 +87,10 @@ def manage_response(s):
     if c.name == None:
         register_user(c, msg)
         return 0
-        
+
     if args > 3:
         store = f"{c.ip}:{c.port} -- {c.name} had too many arguments"
-        log(_StoreTrueAction)
+        log(store)
 
         c.send_data("ERROR|unkown command|", True)
         return 0
