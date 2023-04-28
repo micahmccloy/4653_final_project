@@ -86,7 +86,8 @@ def manage_response(s):
     ## The following code block ensures that the client is registered with a valid name
     if c.name == None:
         register_user(c, msg)
-    
+        return 0
+        
     if args > 3:
         store = f"{c.ip}:{c.port} -- {c.name} had too many arguments"
         log(_StoreTrueAction)
