@@ -15,6 +15,7 @@
 # ///////////////////////////////////////////////////////////////////
 
 # IMPORTS
+from argparse import _StoreTrueAction
 import select
 import socket
 import datetime
@@ -30,7 +31,7 @@ class Client:
         self.port = port
         self.sock = sock
         self.id = (self.ip, self.port)
-        self.name = ""
+        self.name = None
     
     def send_data(self, data, error_msg=False):
         if self.name or error_msg:
@@ -72,6 +73,7 @@ def manage_response(s):
     if ID not in clients:
         print ("Client missed...")
     
+    print("wating on client...")
     c = clients[ID]
     msg = c.sock.recv(1024).decode()
     msg = msg.split("|")
@@ -86,32 +88,52 @@ def manage_response(s):
         register_user(c, msg)
     
     if args > 3:
-        c.send_data("ERROR|Too many Arguments|", True)
+        store = f"{c.ip}:{c.port} -- {c.name} had too many arguments"
+        log(_StoreTrueAction)
+
+        c.send_data("ERROR|unkown command|", True)
         return 0
 
     command = msg[0].upper()
 
     # The command list
     if command == "SAY" and args == 2:
+        store = f"{c.ip}:{c.port} -- {c.name} said {msg[1][:200]}"
+        log(store)
         send_all(c.name, f"PUBLIC|{c.name}|{msg[1][:200]}")
+
     elif command == "PRIVATE" and args == 3:
         target = msg[1]
         if target not in names.keys():
+            store = f"{c.ip}:{c.port} -- {c.name} tried sending a private message to non-existant user {target}. Msg: {msg[2][:200]}"
+            log(store)
             c.send_data("PRIVERR|Invalid Recipient|", True)
         else:
             # Get the client with the specified name and send the message
+            store = f"{c.ip}:{c.port} -- {c.name} sent a private message to {target}. Msg: {msg[2][:200]}"
+            log(store)
+            
             target_client = get_client_by_name(target)
             target_client.send_data(f"PRIVATE|{c.name}|{msg[2][:200]}|")
     elif command == "EXIT":
+        store = f"{c.ip}:{c.port} -- {c.name} leaving the server"
+        log(store)
+
         send_all(c.name, f"LEFT|{c.name}")
         return 1
     elif command == "LIST":
+        store = f"{c.ip}:{c.port} -- {c.name} requested a list of all users"
+        log(store)
         c.send_data(f"LIST|{len(names.keys())}|{'|'.join(names.keys())}|")
     elif command == "TIME":
+        store = f"{c.ip}:{c.port} -- {c.name} requested the time"
+        log(store)
         t = datetime.datetime.now().time()
         c.send_data(f"TIME|{t.hour}:{t.minute}:{t.second}|")
     else:
-        c.send_data("ERROR|Command not recognized|", True)
+        store = f"{c.ip}:{c.port} -- {c.name} gave an unkown command: {msg}"
+        log(store)
+        c.send_data("ERROR|unknown command|", True)
 
     return 0
 
@@ -124,20 +146,38 @@ def register_user(c, msg):
 
     ## Check to ensure the client is connecting
     if msg[0].upper() != "CONNECT" or len(msg) != 2:
-        c.send_data("ERROR|Unkown Command|", True)
+
+        store = f"{c.ip}:{c.port} -- <not connected> attempted an incorrect command"
+        log(store)
+        
+        c.send_data("ERROR|unknown command|", True)
         return
     ## Check valid uname
-    elif len(msg[1]) == 0 or len(msg[1]) > 50:
-        c.send_data(f"REJECTED|{msg[1]}|Name cannot be blank or be greater than 50 characters|", True)
+    elif len(msg[1]) > 50:
+
+        store = f"{c.ip}:{c.port} -- tried connecting with a name over 50 bytes"
+        log(store)
+
+        c.send_data(f"REJECTED|{msg[1]}|Name Too Long|", True)
+
     ## Check unique uname
-    elif msg([1]) in names.keys():
-        c.send_data(f"REJECTED|{msg[1]}|Name already chosen, choose another name|", True)
+    elif msg[1] in names.keys():
+
+        store = f"{c.ip}:{c.port} -- tried connecting with a taken name"
+        log(store)
+
+        c.send_data(f"REJECTED|{msg[1]}|Name is Taken|", True)
     ## Valid Uname
     else:
-        names.append[msg[1]]  = c.getpeername()
+
+        store = f"{c.ip}:{c.port} sucessfully connected as {msg[1]}"
+        log(store)
+
+        names[msg[1]]  = c.sock.getpeername()
         c.set_name(msg[1])
         c.send_data(f"CONNECTED|{msg[1]}|")
-        send_all(msg[1], f"JOINED|{msg[1]}|")
+        # send_all(msg[1], f"JOINED|{msg[1]}|")
+        send_all(c.name, f"JOINED|{msg[1]}|")
 
 ## Sends a packet to all connected clients except any whose name is the argument
 ## This method uses the client function send_data, so the msg argument should not be encoded
@@ -149,6 +189,15 @@ def send_all(name, msg):
         if name != c.name:
             c.send_data(msg)
 
+## Whatever is passed as a parameter is logged within the server logs
+def log(msg):
+    t = datetime.datetime.now().time()
+    msg = f"{t.hour}:{t.minute}:{t.second} | " + msg
+    print(msg)
+    log_file_name = "mm_log_file.txt"
+    with open(log_file_name, "a") as f:
+        f.write(msg + "\n")
+
 while True:
     # Call select to monitor the sockets for activity
     read_sockets, _, _ = select.select(sockets_to_monitor, [], [])
@@ -159,10 +208,11 @@ while True:
         if s == server_socket:
             client_socket, client_address = s.accept()
 
-            clients[client_address] = Client(client_address[0], client_address[1])
+            clients[client_address] = Client(client_address[0], client_address[1], client_socket)
             client_socket.send("COURSEID".encode())
             sockets_to_monitor.append(client_socket)
-            print(f"Client connected: {client_address[0]}:{client_address[1]}")
+            store = f"Client connected: {client_address[0]}:{client_address[1]}"
+            log(store)
 
 
         # If a client socket is ready, receive data from the client
@@ -170,7 +220,8 @@ while True:
             action = manage_response(s)
 
             if action != 0: # The socket must be closed since the client disconnected
-                print(f"Closing connection with {s.getpeername()[0]}:{s.getpeername()[1]}\n")
+                msg = f"Closing connection with {s.getpeername()[0]}:{s.getpeername()[1]}\n"
+                log(store)
                 sockets_to_monitor.remove(s)
                 clients.pop(s.getpeername(), None)
                 names.pop(get_client_by_id(s.getpeername()).name, None)
