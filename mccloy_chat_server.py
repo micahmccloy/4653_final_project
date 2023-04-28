@@ -55,7 +55,6 @@ clients = {}
 names =  {}
 
 # HELPER GETTER FUNCTIONS
-
 def get_client_by_id(id):
     return clients[id]
 
@@ -75,14 +74,23 @@ def manage_response(s):
     
     print("wating on client...")
     c = clients[ID]
+
     try:
         msg = c.sock.recv(1024).decode()
-    except ConnectionResetError:
+    except:
         store = f"{c.ip}:{c.port} -- {c.name} disconnected"
+        store2 = f"Closing connection with {s.getpeername()[0]}:{s.getpeername()[1]}\n"
         log(store)
+        log(store2)
+
+        sockets_to_monitor.remove(s)
+        names.pop(get_client_by_id(s.getpeername()).name, None)
+        clients.pop(s.getpeername(), None)
+
+        
         c.sock.shutdown(socket.SHUT_RD)
         c.sock.close()
-        return 1
+        return 0
         
     msg = msg.split("|")
     msg = msg[:-1]
@@ -127,6 +135,7 @@ def manage_response(s):
     elif command == "EXIT":
         store = f"{c.ip}:{c.port} -- {c.name} leaving the server"
         log(store)
+        print("EXITING Via command")
 
         send_all(c.name, f"LEFT|{c.name}")
         return 1
@@ -218,7 +227,6 @@ while True:
             client_socket, client_address = s.accept()
 
             clients[client_address] = Client(client_address[0], client_address[1], client_socket)
-            client_socket.send("COURSEID".encode())
             sockets_to_monitor.append(client_socket)
             store = f"Client connected: {client_address[0]}:{client_address[1]}"
             log(store)
@@ -229,9 +237,7 @@ while True:
             action = manage_response(s)
 
             if action != 0: # The socket must be closed since the client disconnected
-                msg = f"Closing connection with {s.getpeername()[0]}:{s.getpeername()[1]}\n"
-                log(store)
                 sockets_to_monitor.remove(s)
-                clients.pop(s.getpeername(), None)
                 names.pop(get_client_by_id(s.getpeername()).name, None)
+                clients.pop(s.getpeername(), None)
                 s.close()
